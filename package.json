@@ -1,0 +1,20 @@
+{
+  "name": "pcsc-server",
+  "version": "1.0.0",
+  "description": "PCSC server",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "PCSC",
+    "terminal",
+    "server"
+  ],
+  "author": "Thorsten Liese",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.14.0",
+    "pcsclite": "^0.4.10"
+  }
+}
