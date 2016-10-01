@@ -1,0 +1,6 @@
+nbproject
+node_modules
+typings
+*.log
+app/*.js
+app/*.js.map
