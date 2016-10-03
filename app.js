@@ -38,7 +38,7 @@ pcsc.on('reader', function(r) {
                   {"severity":"success", "summary":"Status", "detail":"Card inserted."});
 
                 // for testing:
-//                readData(function(data){});
+//                dumpMaestro();
             }
         }
     });
@@ -56,26 +56,18 @@ app.get('/status', function(req, res) {
 app.get('/card', function(req, res) {
     if (!reader) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
-        readData(function(data) {
-            emv.parse(data.substr(4), function(emvData){
-                if (emvData != null) {
-                    console.log(emvData);
-                    var tag57 = findEmvTag(emvData, '57');
-                    if (tag57) {
-                        res.send({
-                            blz:   tag57.value.substr(0,8),
-                            ktonr: tag57.value.substr(8,10)
-                        });
-                    } else {
-                        res.send({
-                            blz:   "Wirecard Bank",
-                            ktonr: "1234567890"
-                        });
-                    }
-                } else {
-                    res.send("Sorry, could not parse");
-                }
-            });
+        readMaestro(function(tag57) {
+            if (tag57) {
+                res.send({
+                    blz:   tag57.value.substr(0,8),
+                    ktonr: tag57.value.substr(8,10)
+                });
+            } else {
+                res.send({
+                    blz:   "Nicht gefunden",
+                    ktonr: "Nicht gefunden"
+                });
+            }
         })
     }
 });
@@ -98,18 +90,80 @@ function sendAndReceive(protocol, data, callback) {
     });
 }
 
-function readData(callback) {
+function readMaestro(callback) {
+    reader.connect({ share_mode : this.SCARD_SHARE_SHARED }, function(err, protocol) {
+        if (err) console.log(err); 
+        else {
+            // SELECT AID MAESTRO: '00A4040007A000000004306000'
+            sendAndReceive(protocol, '00A4040007A000000004306000', function(data) {
+                // EC
+                readRecord(protocol, 1, 3, 4, function(tag57) {
+                    if (tag57) {
+                        reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
+                        callback(tag57);
+                    } else {
+                        // try another one:
+                        readRecord(protocol, 2, 1, 6, function(tag57) {
+                            reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
+                            callback(tag57);
+                        });
+                    }
+                })
+
+            });
+        }
+    });
+}
+
+function readRecord(protocol, sfi, rec, offset, callback) {
+    sendAndReceive(protocol, '00B2'+hexChar(rec)+hexChar((sfi << 3) | 4)+'00', function(data) {
+        emv.parse(data.toString('hex').substr(offset), function(emvData) {
+            if (emvData != null) {
+                console.log(emvData);
+                callback(findEmvTag(emvData, '57'));
+            } else {
+                callback(null);
+            }
+        });
+    });
+}
+
+function hexChar(x) {
+    return ('0'+x.toString(16)).substr(-2);
+}
+
+// -------------- THE FOLLOWING IS FOR TESTING ONLY ------------
+
+function dumpNext(protocol, sfi, rec, maxSfi, maxRec) {
+    if (rec == 1) console.log("SFI " + sfi);
+    sendAndReceive(protocol, '00B2'+hexChar(rec)+hexChar((sfi << 3) | 4)+'00', function(data) {
+        if (sfi == maxSfi && rec == maxRec) {
+            reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
+        } else {
+            if (rec == maxRec) {rec = 1; sfi++;} else rec++;
+            dumpNext(protocol, sfi, rec, maxSfi, maxRec);
+        }
+    });
+}
+
+function dumpPSE() {
+    // SELECT 1PAY.SYS.DDF01 or 2PAY.SYS.DDF01 (contactless)
+    dumpAll(new Buffer("1PAY.SYS.DDF01", 'ASCII').toString('hex'));
+}
+
+function dumpMaestro() {
+    dumpAll("A0000000043060");
+}
+
+function dumpAll(dfname) {
     reader.connect({ share_mode : this.SCARD_SHARE_SHARED }, function(err, protocol) {
         if (err) console.log(err); 
         else {
             console.log('Protocol(', reader.name, '):', protocol);
-            // SELECT AID MAESTRO: '00A4040007A000000004306000'
-            sendAndReceive(protocol, '00A4040007A000000004306000', function(data) {
-                // READ_RECORD: '00B2020C00'
-                sendAndReceive(protocol, '00B2030C00', function(data) {
-                    callback(data.toString('hex'));
-                    reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
-                });
+            // SELECT DFNAME
+            sendAndReceive(protocol, '00A40400' + hexChar(dfname.length/2) + dfname +'00', function(data) {
+                // READ ALL
+                dumpNext(protocol, 1, 1, 3, 16);
             });
         }
     });
