@@ -11,11 +11,11 @@ Start:
 
     npm start
 
-## Sample REST API
+## Sample API
 
-    GET http://localhost:3004/status
+    WEBSOCKET ws://localhost:3004/status
     
-Long-polling interface for card insertion and removal notifications.
+Broadcasting websocket for card insertion and removal notifications.
 
     GET http://localhost:3004/card
     
