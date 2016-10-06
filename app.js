@@ -39,6 +39,8 @@ app.get('/status', function(req, res) {
 app.get('/card', function(req, res) {
     if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
+        // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.5s
+//        setTimeout(function() {
         pcsc.readMaestro(function(tag57) {
             if (tag57) {
                 res.send({
@@ -52,5 +54,7 @@ app.get('/card', function(req, res) {
                 });
             }
         })
+        // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.5s
+//        }, 500);
     }
 });
