@@ -28,6 +28,7 @@ pcsc.registerReader(
 );
 
 app.get('/status', function(req, res) {
+    console.log('GET STATUS');
     if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
         notifier.addObserver('status', function(arg) {
@@ -37,11 +38,22 @@ app.get('/status', function(req, res) {
 });
 
 app.get('/card', function(req, res) {
+    console.log('GET CARD');
     if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
-        // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
-        setTimeout(function() {
-        pcsc.readMaestro(function(tag57) {
+        // if not reading already, start reading of card:
+        if (!notifier.getObservers('card')) {
+            // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
+            setTimeout(function() {
+            pcsc.readMaestro(function(tag57) {
+                notifier.notifyObservers('card', tag57);
+            });
+            // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
+            }, 750);
+        }
+
+        // add observer for card reading result
+        notifier.addObserver('card', function(tag57) {
             if (tag57) {
                 res.send({
                     routingcode:  tag57.value.substr(3,5),
@@ -53,8 +65,6 @@ app.get('/card', function(req, res) {
             } else {
                 res.send({});
             }
-        })
-        // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
-        }, 750);
+        });
     }
 });

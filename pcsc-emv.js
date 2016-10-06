@@ -50,7 +50,7 @@ function sendAndReceive(protocol, data, callback) {
 
 function readMaestro(callback) {
     reader.connect({ share_mode : this.SCARD_SHARE_SHARED }, function(err, protocol) {
-        if (err) { console.log(err); callback(); } 
+        if (err || !protocol) { console.log(err); callback(); } 
         else {
             // SELECT AID MAESTRO: '00A4040007A000000004306000'
             sendAndReceive(protocol, '00A4040007A000000004306000', function(data) {

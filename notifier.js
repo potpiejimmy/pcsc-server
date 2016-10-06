@@ -17,4 +17,8 @@ Notifier.prototype.notifyObservers = function(key, arg) {
   }
 }
 
+Notifier.prototype.getObservers = function(key) {
+  return this.observers[key];
+}
+
 module.exports = Notifier;
