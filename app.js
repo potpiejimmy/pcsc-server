@@ -1,9 +1,10 @@
 var express = require('express');
+var app = express();
+var expressWs = require('express-ws')(app);
 
 var pcsc = require('./pcsc-emv');
 var Notifier = require('./notifier');
 
-var app = express();
 var notifier = new Notifier();
 
 app.use(function(req, res, next) {
@@ -18,23 +19,20 @@ app.listen(3004, function () {
 
 pcsc.registerReader(
     function() {
-        notifier.notifyObservers('status',
-        {"severity":"success", "summary":"Status", "detail":"Card inserted."});
+        expressWs.getWss().clients.forEach(function(client) {
+            client.send(JSON.stringify({"severity":"success", "summary":"Status", "detail":"Card inserted."}));
+        });
     },
     function() {
-        notifier.notifyObservers('status',
-        {"severity":"warn", "summary":"Status", "detail":"Card removed."});
+        expressWs.getWss().clients.forEach(function(client) {
+            client.send(JSON.stringify({"severity":"warn", "summary":"Status", "detail":"Card removed."}));
+        });
     }
 );
 
-app.get('/status', function(req, res) {
-    console.log('GET STATUS');
-    if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
-    else {
-        notifier.addObserver('status', function(arg) {
-            res.send(arg);
-        });
-    }
+app.ws('/status', function(ws, req) {
+    console.log('Websocket connected.');
+    // Note: All open websockets contained in expressWs.getWss().clients.
 });
 
 app.get('/card', function(req, res) {
@@ -67,4 +65,13 @@ app.get('/card', function(req, res) {
             }
         });
     }
+});
+
+// --- for testing
+
+app.get('/test', function(req, res) {
+    expressWs.getWss().clients.forEach(function(client) {
+        client.send(JSON.stringify({"severity":"warn", "summary":"Status", "detail":"Testing the websocket."}));
+    });
+    res.send('Status sent.');
 });
