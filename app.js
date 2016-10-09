@@ -43,7 +43,7 @@ app.get('/card', function(req, res) {
         if (!notifier.getObservers('card')) {
             // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
             setTimeout(function() {
-            pcsc.readMaestro(function(tag57) {
+            pcsc.readMaestro().then(tag57 => {
                 notifier.notifyObservers('card', tag57);
             });
             // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
