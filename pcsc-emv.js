@@ -90,7 +90,9 @@ function readRecord(protocol, sfi, rec, offset) {
             emv.parse(data.toString('hex').substr(offset), function(emvData) {
                 if (emvData != null) {
                     console.log(emvData);
-                    resolve(findEmvTag(emvData, '57'));
+                    var pan = findEmvTag(emvData, '57');
+                    if (!pan) pan = findEmvTag(emvData, '5A');
+                    resolve(pan);
                 } else {
                     resolve(null);
                 }

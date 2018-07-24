@@ -1,0 +1,12 @@
+{
+    "0100599392": {
+        "name": "Thorsten Liese",
+        "bankingId": "thorsten.liese01",
+        "appId": "de.commerzbanking.mobil2"
+    },
+    "25122254": {
+        "name": "Max Mustermann",
+        "bankingId": "max.mustermann",
+        "appId": "de.commerzbanking.mobil2"
+    }
+}

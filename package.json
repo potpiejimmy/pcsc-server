@@ -16,7 +16,9 @@
   "dependencies": {
     "express": "^4.14.0",
     "express-ws": "^2.0.0",
+    "fs": "0.0.1-security",
     "node-emv": "^1.0.16",
-    "pcsclite": "^0.4.10"
+    "pcsclite": "^0.4.10",
+    "request": "^2.81.0"
   }
 }
