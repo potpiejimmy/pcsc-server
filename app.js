@@ -83,12 +83,12 @@ app.get('/tan', (req, res) => {
         // if not creating TAN already, start creating TAN
         if (!notifier.getObservers('tan')) {
             pcsc.createTAN("1234", "335554", "1,23")
-            .then(tan => notifier.notifyObservers('tan', "'DONE'"))
+            .then(tan => notifier.notifyObservers('tan', tan))
             .catch(err => { console.log(err); notifier.notifyObservers('tan', err); });
         }
 
         // add observer for TAN creation
-        notifier.addObserver('tan', tan => res.send(tan));
+        notifier.addObserver('tan', tan => res.send({tan:tan}));
     }
 });
 

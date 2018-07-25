@@ -83,6 +83,7 @@ function createTAN(startcode, kontonummer, betrag) {
 //    console.log(Buffer.from(hashData).toString('hex'));
 
     let cardNo;
+    let ipb;
 
     return connectReader().then(protocol =>
 
@@ -104,10 +105,13 @@ function createTAN(startcode, kontonummer, betrag) {
             cardNo = data.toString('hex').substr(6, 12);
         }).then(() =>
 
-        // SEARCH RECORD IPB (search for '9F56')
-        sendAndReceive(protocol, '00A2010F090400CE9F56000000FF00')).then(data =>
+        // SEARCH RECORD IPB (search for '9F56' - Issuer Proprietary Bitmap)
+        sendAndReceive(protocol, '00A2010F090400CE9F56000000FF00')).then(data => {
+            // IPB
+            ipb = data.toString('hex').substr(20, 36);
+        }).then(() =>
 
-        // SEARCH RECORD CDOL (SECCOS ab 6.0) (search for '8C')
+        // SEARCH RECORD CDOL (SECCOS ab 6.0) (search for '8C' - CDOL)
         sendAndReceive(protocol, '00A2010F080400CE8C000000FF00')).then(data =>
 
         // VERIFY
@@ -118,9 +122,34 @@ function createTAN(startcode, kontonummer, betrag) {
 
         // GENERATE AC (SECCOS vor 6.0)
         sendAndReceive(protocol, '80AE00002B0000000000000000000000008000000000099900000000' + hash.toString('hex').substr(0,8) + '0000000000000000000020800000003400')).then(data => {
+            
+            // Secoder Firewall blocks, use dummy data:
+            return '771E9F2701009F360201029F2608ECF50D2C1EAF4EE29F1007038201003100009000';
+        }).then(data =>
+        
+        // Nutzdaten parsen
+        emvParse(data.substr(4)).then(emvData => {
+
+            let acData = "";
+            emvData.forEach(tag => acData += tag.value);
+            console.log("GENERATE AC DATA " + acData);
+
+            let dataBin = bufToBitString(Buffer.from(acData, 'hex'));
+            let ipbMask = bufToBitString(Buffer.from(ipb, 'hex'));
+            let usedBits = "";
+
+            console.log("DATA = " + dataBin);
+            console.log("IPB  = " + ipbMask);
+            for (var i=0; i<ipbMask.length; i++) if (ipbMask[i] == '1') usedBits += dataBin[i];
+            console.log("RES  = " + usedBits);
+            usedBits = usedBits.substr(8) + usedBits.substr(0,8);
+            console.log("SHIFT= " + usedBits);
+            let tan = parseInt(usedBits, 2);
+            console.log("TAN  = " + tan);
+
             disconnectReader();
-            return data;
-        })
+            return tan;
+        }))
     );
 }
 
@@ -166,22 +195,33 @@ function sendAndReceive(protocol, data) {
 
 function readRecord(protocol, sfi, rec, offset) {
     return sendAndReceive(protocol, '00B2'+hexChar(rec)+hexChar((sfi << 3) | 4)+'00')
-    .then(data => {
-        return new Promise(function(resolve, reject) {
-            emv.parse(data.toString('hex').substr(offset), function(emvData) {
-                if (emvData != null) {
-                    console.log(emvData);
-                    resolve(findEmvTag(emvData, '57'));
-                } else {
-                    resolve(null);
-                }
-            });
-        });
+    .then(data => emvParse(data.toString('hex').substr(offset)))
+    .then(emvData => {
+        if (emvData != null) {
+            console.log(emvData);
+            return findEmvTag(emvData, '57');
+        }
+    });
+}
+
+function emvParse(data) {
+    return new Promise(function(resolve, reject) {
+        emv.parse(data, emvData => resolve(emvData));
     });
 }
 
 function hexChar(x) {
     return ('0'+x.toString(16)).substr(-2);
+}
+
+function binChar(x) {
+    return ('0000000' + x.toString(2)).substr(-8);
+}
+
+function bufToBitString(buf) {
+    let result = '';
+    for (var i=0; i<buf.length; i++) result += binChar(buf[i]);
+    return result;
 }
 
 // -------------- THE FOLLOWING IS FOR TESTING ONLY ------------
