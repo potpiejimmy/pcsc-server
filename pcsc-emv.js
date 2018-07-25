@@ -5,6 +5,8 @@ var pcsc = pcsclite();
 
 var reader;
 
+// --- start public interface methods ---
+
 function registerReader(onCardInserted, onCardRemoved) {
     pcsc.on('reader', function(r) { 
         console.log('New reader detected', r.name);
@@ -30,6 +32,115 @@ function getReader() {
     return reader;
 }
 
+function readMaestro() {
+    return connectReader().then(protocol =>
+        // SELECT AID MAESTRO: '00A4040007A000000004306000'
+        sendAndReceive(protocol, '00A4040007A000000004306000')
+        .then(data => {
+                // EC
+            return readRecord(protocol, 1, 3, 4);
+        })
+        .then(tag57 => {
+            if (tag57) {
+                return tag57;
+            } else {
+                // try another one:
+                return readRecord(protocol, 2, 1, 6);
+            }
+        })
+        .then(tag57 => {
+            disconnectReader();
+            return tag57;
+        })
+    );
+}
+
+function createTAN(startcode, kontonummer, betrag) {
+    // See https://wiki.ccc-ffm.de/projekte:tangenerator:start
+
+    let hashData = [];
+
+    hashData.push(0xE1); // DIN-66003
+    hashData.push(...Buffer.from('Start-Code:', 'ASCII'));
+
+    hashData.push(0xE0); // BCD
+    hashData.push(...Buffer.from("8711" + startcode, 'hex'));
+
+    hashData.push(0xE1); // DIN-66003
+    hashData.push(...Buffer.from('Kontonummer', 'ASCII'));
+
+    hashData.push(0xE1); // DIN-66003
+    hashData.push(...Buffer.from(kontonummer, 'ASCII'));
+
+    hashData.push(0xE1); // DIN-66003
+    hashData.push(...Buffer.from('Betrag', 'ASCII'));
+
+    hashData.push(0xE1); // DIN-66003
+    hashData.push(...Buffer.from(betrag, 'ASCII'));
+
+    hashData.push(0xB6); // B0 + 6 = B6 (6 Felder)
+
+//    console.log(Buffer.from(hashData).toString('hex'));
+
+    let cardNo;
+
+    return connectReader().then(protocol =>
+
+        // SELECT FILE AID TAN ANWENDUNG 'D27600002554440100'
+        // AID: D2 76 00 00 25 54 44 01 00
+        // RID: D2 76 00 00 25
+        //      D: "national registration"
+        //       2 76: ISO 3166 Country Code Deutschland
+        //            00 00 25: ZKA?
+        // PIX:                54 44 01 00: TAN Anwendung DF_TAN
+        sendAndReceive(protocol, '00A4040C09D27600002554440100').then(data =>
+
+        // GET PROCESSING OPTIONS
+        sendAndReceive(protocol, '80A8000002830000')).then(data =>
+
+        // READ RECORD (read card data)
+        sendAndReceive(protocol, '00B201BC00')).then(data => {
+            // die letzten beiden Ziffern der Kurz-BLZ plus die 10-stellige Karten-Nr. MM NN NN NN NN NN
+            cardNo = data.toString('hex').substr(6, 12);
+        }).then(() =>
+
+        // SEARCH RECORD IPB (search for '9F56')
+        sendAndReceive(protocol, '00A2010F090400CE9F56000000FF00')).then(data =>
+
+        // SEARCH RECORD CDOL (SECCOS ab 6.0) (search for '8C')
+        sendAndReceive(protocol, '00A2010F080400CE8C000000FF00')).then(data =>
+
+        // VERIFY
+        sendAndReceive(protocol, '00200081082C' + cardNo + 'FF')).then(data =>
+
+        // HASH
+        sendAndReceive(protocol, '002A90A0' + hexChar(hashData.length+5) + '90008081' + hexChar(hashData.length) + Buffer.from(hashData).toString('hex') + '00')).then(hash =>
+
+        // GENERATE AC (SECCOS vor 6.0)
+        sendAndReceive(protocol, '80AE00002B0000000000000000000000008000000000099900000000' + hash.toString('hex').substr(0,8) + '0000000000000000000020800000003400')).then(data => {
+            disconnectReader();
+            return data;
+        })
+    );
+}
+
+// --- end public interface methods --
+
+function connectReader() {
+    //console.log("EXCLUSIVE: " + reader.SCARD_SHARE_EXCLUSIVE);
+    //console.log("SHARED: " + reader.SCARD_SHARE_SHARED);
+    return new Promise(function(resolve, reject) {
+        reader.connect({ share_mode : reader.SCARD_SHARE_SHARED }, function(err, protocol) {
+            if (err || !protocol) { console.log(err); reject(err); }
+            resolve(protocol);
+        });
+    });
+}
+
+function disconnectReader() {
+    reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
+}
+
 function findEmvTag(emvData, tagName) {
     var found;
     emvData.forEach(function(tag) {
@@ -40,44 +151,14 @@ function findEmvTag(emvData, tagName) {
 
 function sendAndReceive(protocol, data) {
     return new Promise(function(resolve, reject) {
+        console.log('>>>', data);
         reader.transmit(new Buffer(data,'hex'), 512, protocol, function(err, data) {
             if (err) {
                 console.log(err); 
                 reject(err);
             } else {
-                console.log('Data received', data.toString('hex'));
+                console.log('<<<', data.toString('hex'));
                 resolve(data);
-            }
-        });
-    });
-}
-
-function readMaestro() {
-    return new Promise(function(resolve, reject) {
-        reader.connect({ share_mode : this.SCARD_SHARE_SHARED }, function(err, protocol) {
-            if (err || !protocol) { console.log(err); reject(err); } 
-            else {
-                // SELECT AID MAESTRO: '00A4040007A000000004306000'
-                sendAndReceive(protocol, '00A4040007A000000004306000')
-                .then(data => {
-                     // EC
-                    return readRecord(protocol, 1, 3, 4);
-                })
-                .then(tag57 => {
-                        if (tag57) {
-                            return tag57;
-                        } else {
-                            // try another one:
-                            return readRecord(protocol, 2, 1, 6);
-                        }
-                })
-                .then(tag57 => {
-                    reader.disconnect(reader.SCARD_LEAVE_CARD, function(err) {});
-                    resolve(tag57);
-                })
-                .catch(err => {
-                    reject(err);
-                });
             }
         });
     });
@@ -127,7 +208,7 @@ function dumpMaestro() {
 }
 
 function dumpAll(dfname) {
-    reader.connect({ share_mode : this.SCARD_SHARE_SHARED }, function(err, protocol) {
+    reader.connect({ share_mode : reader.SCARD_SHARE_SHARED }, function(err, protocol) {
         if (err) console.log(err); 
         else {
             console.log('Protocol(', reader.name, '):', protocol);
@@ -145,3 +226,4 @@ function dumpAll(dfname) {
 module.exports.getReader = getReader;
 module.exports.registerReader = registerReader;
 module.exports.readMaestro = readMaestro;
+module.exports.createTAN = createTAN;

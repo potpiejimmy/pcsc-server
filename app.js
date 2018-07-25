@@ -30,12 +30,18 @@ pcsc.registerReader(
     }
 );
 
-app.ws('/status', function(ws, req) {
+/**
+ * This websocket endpoint notifies about card insertion and removal
+ */
+app.ws('/status', (ws, req) => {
     console.log('Websocket connected.');
     // Note: All open websockets contained in expressWs.getWss().clients.
 });
 
-app.get('/card', function(req, res) {
+/**
+ * Reads some basic card data
+ */
+app.get('/card', (req, res) => {
     console.log('GET CARD');
     if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
@@ -45,14 +51,14 @@ app.get('/card', function(req, res) {
             setTimeout(function() {
             pcsc.readMaestro().then(tag57 => {
                 notifier.notifyObservers('card', tag57);
-            });
+            }).catch(err => { console.log(err); notifier.notifyObservers('card', err);});
             // WINDOWS PLATFORM ONLY, ADD ARTIFICIAL DELAY OF 0.75s
             }, 750);
         }
 
         // add observer for card reading result
         notifier.addObserver('card', function(tag57) {
-            if (tag57) {
+            if (tag57 && tag57.value) {
                 res.send({
                     routingcode:  tag57.value.substr(3,5),
                     branch:       tag57.value.substr(5,3),
@@ -64,6 +70,25 @@ app.get('/card', function(req, res) {
                 res.send({});
             }
         });
+    }
+});
+
+/**
+ * Creates a ChipTAN
+ */
+app.get('/tan', (req, res) => {
+    console.log('CREATE TAN');
+    if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
+    else {
+        // if not creating TAN already, start creating TAN
+        if (!notifier.getObservers('tan')) {
+            pcsc.createTAN("1234", "335554", "1,23")
+            .then(tan => notifier.notifyObservers('tan', "'DONE'"))
+            .catch(err => { console.log(err); notifier.notifyObservers('tan', err); });
+        }
+
+        // add observer for TAN creation
+        notifier.addObserver('tan', tan => res.send(tan));
     }
 });
 
