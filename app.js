@@ -77,12 +77,12 @@ app.get('/card', (req, res) => {
  * Creates a ChipTAN
  */
 app.get('/tan', (req, res) => {
-    console.log('CREATE TAN');
+    console.log('CREATE TAN, flickercode=' + req.query.flickercode);
     if (!pcsc.getReader()) res.send({"severity":"error", "summary":"Error", "detail":"Card reader not connected."});
     else {
         // if not creating TAN already, start creating TAN
         if (!notifier.getObservers('tan')) {
-            pcsc.createTAN("11048816650405262080595614312C303009")
+            pcsc.createTAN(req.query.flickercode ? req.query.flickercode : "11048816650405262080595614312C303009")
             .then(tan => notifier.notifyObservers('tan', tan))
             .catch(err => { console.log(err); notifier.notifyObservers('tan', err); });
         }

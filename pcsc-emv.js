@@ -58,27 +58,30 @@ function readMaestro() {
 function createTAN(flickercode) {
     // See https://wiki.ccc-ffm.de/projekte:tangenerator:start
 
+    // Parse the flickercode (assume it always consists
+    // of the startcode and two other fields for Kontonummer and Betrag)
     let parseIx = 4; // LL04
     let len = 8;
     let startcode = flickercode.substr(parseIx,len);
     parseIx += len;
-    parseIx++; // BCD
+    parseIx++; // assume BCD for Kontonummer
     len = parseInt(flickercode[parseIx++]) * 2;
     let kontonummer = flickercode.substr(parseIx,len);
     parseIx += len;
-    parseIx++; // ASCII
+    parseIx++; // assume ASCII for Betrag
     len = parseInt(flickercode[parseIx++]) * 2;
     let betrag = Buffer.from(flickercode.substr(parseIx,len), 'hex').toString('ASCII');
 
     console.log("startcode=" + startcode + ", kontonummer=" + kontonummer + ", betrag=" + betrag);
 
+    // Now, assemble the core data for the HASH call later
     let hashData = [];
 
     hashData.push(0xE1); // DIN-66003
     hashData.push(...Buffer.from('Start-Code:', 'ASCII'));
 
     hashData.push(0xE0); // BCD
-    hashData.push(...Buffer.from("8711" + startcode, 'hex'));
+    hashData.push(...Buffer.from(startcode, 'hex'));
 
     hashData.push(0xE1); // DIN-66003
     hashData.push(...Buffer.from('Kontonummer', 'ASCII'));
@@ -137,8 +140,12 @@ function createTAN(flickercode) {
         // GENERATE AC (SECCOS vor 6.0)
         sendAndReceive(protocol, '80AE00002B0000000000000000000000008000000000099900000000' + hash.toString('hex').substr(0,8) + '0000000000000000000020800000003400')).then(data => {
             
-            // Secoder Firewall blocks, use dummy data:
-            return '771E9F2701009F360201029F2608ECF50D2C1EAF4EE29F1007038201003100009000';
+            if (data.length < 10) {
+                // XXX Secoder Firewall blocks, use dummy data:
+                return '771E9F2701009F360201029F2608ECF50D2C1EAF4EE29F1007038201003100009000';
+            } else {
+                return data.toString('hex');
+            }
         }).then(data =>
         
         // Nutzdaten parsen
