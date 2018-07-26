@@ -55,8 +55,22 @@ function readMaestro() {
     );
 }
 
-function createTAN(startcode, kontonummer, betrag) {
+function createTAN(flickercode) {
     // See https://wiki.ccc-ffm.de/projekte:tangenerator:start
+
+    let parseIx = 4; // LL04
+    let len = 8;
+    let startcode = flickercode.substr(parseIx,len);
+    parseIx += len;
+    parseIx++; // BCD
+    len = parseInt(flickercode[parseIx++]) * 2;
+    let kontonummer = flickercode.substr(parseIx,len);
+    parseIx += len;
+    parseIx++; // ASCII
+    len = parseInt(flickercode[parseIx++]) * 2;
+    let betrag = Buffer.from(flickercode.substr(parseIx,len), 'hex').toString('ASCII');
+
+    console.log("startcode=" + startcode + ", kontonummer=" + kontonummer + ", betrag=" + betrag);
 
     let hashData = [];
 
