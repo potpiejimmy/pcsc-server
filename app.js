@@ -19,13 +19,15 @@ app.listen(3004, function () {
 
 pcsc.registerReader(
     function() {
+        global.cardStatus = "IN";
         expressWs.getWss().clients.forEach(function(client) {
-            client.send(JSON.stringify({"severity":"success", "summary":"Status", "detail":"Card inserted."}));
+            client.send(JSON.stringify({"cardstatus":global.cardStatus, "severity":"success", "summary":"Status", "detail":"Card inserted."}));
         });
     },
     function() {
+        global.cardStatus = "OUT";
         expressWs.getWss().clients.forEach(function(client) {
-            client.send(JSON.stringify({"severity":"warn", "summary":"Status", "detail":"Card removed."}));
+            client.send(JSON.stringify({"cardstatus":global.cardStatus, "severity":"warn", "summary":"Status", "detail":"Card removed."}));
         });
     }
 );
@@ -36,6 +38,7 @@ pcsc.registerReader(
 app.ws('/status', (ws, req) => {
     console.log('Websocket connected.');
     // Note: All open websockets contained in expressWs.getWss().clients.
+    ws.send(JSON.stringify({"cardstatus":global.cardStatus}));
 });
 
 /**
